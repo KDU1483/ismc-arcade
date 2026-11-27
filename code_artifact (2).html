@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>INFINITE STAIRS ONLINE - 도트 에디션</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri/dist/galmuri.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            image-rendering: pixelated;
+        }
+        body {
+            font-family: 'Galmuri11', 'Galmuri9', monospace;
+            background-color: #0f172a;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        .font-pixel-en {
+            font-family: 'Press Start 2P', monospace;
+        }
+        .font-pixel-kr {
+            font-family: 'Galmuri11', monospace;
+        }
+
+        /* 픽셀 명판 버튼 (레퍼런스 이미지의 나무/황금 명판 스타일) */
+        .pixel-plaque {
+            position: relative;
+            background: linear-gradient(180deg, #fde68a 0%, #fcd34d 45%, #f59e0b 100%);
+            border: 4px solid #451a03;
+            box-shadow:
+                inset 0 4px 0 #fef3c7,
+                inset 0 -4px 0 #d97706,
+                0 6px 0 #270e02;
+            color: #451a03;
+            transition: transform 0.05s steps(1);
+        }
+        .pixel-plaque:active {
+            transform: translateY(4px);
+            box-shadow:
+                inset 0 2px 0 #fef3c7,
+                inset 0 -2px 0 #d97706,
+                0 2px 0 #270e02;
+        }
+        /* 명판 네 모서리 나사못 디테일 */
+        .pixel-plaque-rivets::before,
+        .pixel-plaque-rivets::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #78350f;
+            box-shadow: 0 1px 0 #fef3c7;
+            top: 5px;
+        }
+        .pixel-plaque-rivets::before { left: 5px; }
+        .pixel-plaque-rivets::after { right: 5px; }
+
+        .pixel-btn-indigo {
+            background: linear-gradient(180deg, #818cf8 0%, #4f46e5 100%);
+            border: 4px solid #1e1b4b;
+            box-shadow: inset 0 4px 0 #a5b4fc, inset 0 -4px 0 #3730a3, 0 5px 0 #0f172a;
+            color: #ffffff;
+        }
+        .pixel-btn-indigo:active {
+            transform: translateY(3px);
+            box-shadow: inset 0 2px 0 #a5b4fc, 0 2px 0 #0f172a;
+        }
+
+        .pixel-box {
+            background-color: #1e293b;
+            border: 4px solid #090d16;
+            box-shadow: inset 0 4px 0 #334155, inset 0 -4px 0 #0f172a, 0 8px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        /* 인게임 아케이드 조작 버튼 */
+        .arcade-ctrl-btn {
+            border: 4px solid #090d16;
+            transition: transform 0.04s steps(1);
+        }
+        .arcade-ctrl-btn:active, .arcade-ctrl-btn.pressed {
+            transform: translateY(5px);
+        }
+
+        /* 픽셀 로고 입체 그림자 */
+        .logo-stroke {
+            text-shadow:
+                -3px -3px 0 #090d16,
+                 3px -3px 0 #090d16,
+                -3px  3px 0 #090d16,
+                 3px  3px 0 #090d16,
+                 0px  6px 0 #090d16;
+        }
+
+        /* 스크롤바 도트화 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #475569; border: 2px solid #0f172a; }
+    </style>
+</head>
+<body class="bg-slate-950 text-white h-screen w-screen flex items-center justify-center">
+
+    <!-- 게임 전체 컨테이너 (모바일 세로형 아케이드 비율 최적화) -->
+    <div id="game-wrapper" class="relative w-full max-w-[460px] h-full max-h-[860px] bg-slate-900 sm:border-4 sm:border-slate-700 shadow-2xl overflow-hidden flex flex-col">
+
+        <!-- 실시간 배경/게임 캔버스 (도트 렌더링) -->
+        <canvas id="gameCanvas" class="absolute inset-0 w-full h-full block z-0"></canvas>
+
+        <!-- 토스트 알림 (alert() 대체) -->
+        <div id="toast-box" class="pointer-events-none fixed top-5 left-1/2 -translate-x-1/2 z-50 transition-all duration-150 opacity-0 -translate-y-4">
+            <div id="toast-msg" class="bg-slate-900 border-4 border-amber-400 text-amber-300 px-4 py-2 text-xs sm:text-sm font-bold shadow-xl">
+                알림 메시지
+            </div>
+        </div>
+
+        <!-- =========================================================================
+             1. 메인 타이틀 로비 (첨부 이미지 레이아웃 + 실시간 온라인 광장 + 채팅)
+             ========================================================================= -->
+        <div id="screen-lobby" class="relative z-10 flex-1 flex flex-col justify-between p-3 sm:p-4">
+
+            <!-- 상단 바: 좌측 온라인 접속자/프로필 & 우측 SFX/BGM/설정 도트 버튼 -->
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex flex-col gap-1">
+                    <button id="btn-open-profile" class="bg-slate-900/90 hover:bg-slate-800 border-2 border-amber-400/80 px-2.5 py-1.5 text-left cursor-pointer">
+                        <div class="flex items-center gap-1.5">
+                            <span id="lobby-online-dot" class="inline-block w-2 h-2 bg-emerald-400 animate-pulse"></span>
+                            <span id="lobby-online-count" class="text-[10px] text-emerald-300 font-bold">온라인 1명</span>
+                        </div>
+                        <div id="lobby-nick-display" class="text-xs font-bold text-white truncate max-w-[130px] mt-0.5">도전자_100</div>
+                    </button>
+                </div>
+
+                <!-- 우측 상단 SFX / BGM / 키설정 도트 명판 버튼 -->
+                <div class="flex gap-1.5">
+                    <button id="btn-toggle-sfx" class="pixel-plaque w-10 h-10 flex items-center justify-center cursor-pointer" title="효과음 켜기/끄기">
+                        <span id="icon-sfx" class="text-base text-rose-700">🔊</span>
+                    </button>
+                    <button id="btn-toggle-bgm" class="pixel-plaque w-10 h-10 flex items-center justify-center cursor-pointer" title="배경음 켜기/끄기">
+                        <span id="icon-bgm" class="text-base text-rose-700">🎵</span>
+                    </button>
+                    <button id="btn-open-settings" class="pixel-plaque w-10 h-10 flex items-center justify-center cursor-pointer" title="조작키 설정">
+                        <span class="text-base text-slate-900">⚙️</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 중앙 상단 타이틀 로고 배너 (첨부 이미지의 INFINITE STAIRS ONLINE 엠블럼 스타일) -->
+            <div class="flex flex-col items-center mt-1 pointer-events-none">
+                <div class="bg-slate-900/90 border-4 border-amber-400 px-3 py-1 mb-1 shadow-md">
+                    <span class="font-pixel-en text-[9px] text-amber-300 tracking-widest">★ PIXEL ARCADE EDITION ★</span>
+                </div>
+                <div class="relative flex flex-col items-center">
+                    <div class="bg-slate-800 border-4 border-slate-950 px-4 py-1 shadow-lg">
+                        <span class="font-pixel-en text-lg sm:text-xl text-amber-400 logo-stroke tracking-wider">INFINITE</span>
+                    </div>
+                    <div class="bg-slate-900 border-4 border-slate-950 px-5 py-1.5 -mt-1 shadow-xl">
+                        <span class="font-pixel-en text-2xl sm:text-3xl text-amber-300 logo-stroke tracking-wider">STAIRS</span>
+                    </div>
+                    <span class="font-pixel-en text-sm sm:text-base text-white logo-stroke mt-1 tracking-widest">ONLINE</span>
+                </div>
+            </div>
+
+            <!-- 중앙 빈 무대 공간: 캔버스 거리 배경 위에 선택된 내 캐릭터 & 온라인 유저들이 표시되는 영역 -->
+            <div id="lobby-stage" class="flex-1 min-h-[125px] flex flex-col items-center justify-end pb-1 pointer-events-none">
+                <div id="lobby-char-tag" class="bg-slate-950/90 border-2 border-amber-400 px-3 py-0.5 text-xs text-amber-300 font-bold mb-0.5 shadow-md">
+                    비지니스맨 (BUSINESSMAN)
+                </div>
+            </div>
+
+            <!-- 온라인 로비 실시간 채팅 박스 -->
+            <div class="bg-slate-950/85 border-2 border-slate-700 p-2 mb-2">
+                <div id="lobby-chat-messages" class="h-14 overflow-y-auto flex flex-col gap-1 text-[11px] mb-1.5 pr-1">
+                    <div class="text-slate-400">[시스템] 온라인 서버에 오신 것을 환영합니다!</div>
+                </div>
+                <form id="lobby-chat-form" class="flex gap-1.5">
+                    <input id="lobby-chat-input" type="text" maxlength="36" placeholder="온라인 채팅 입력..." 
+                        class="flex-1 bg-slate-900 border border-slate-600 px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-400">
+                    <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 text-xs cursor-pointer">
+                        전송
+                    </button>
+                </form>
+            </div>
+
+            <!-- 하단 도트 명판 컨트롤 영역 -->
+            <div class="flex flex-col gap-2 pb-1">
+                <!-- 상단 2열 큰 명판: [좌: 빨간 재생 삼각형 (싱글)] / [우: 캐릭터 도트 아이콘] -->
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="btn-start-solo" class="pixel-plaque py-2 flex flex-col items-center justify-center cursor-pointer group" title="싱글 랭킹 모드 시작">
+                        <div class="pixel-plaque-rivets"></div>
+                        <svg class="w-8 h-8 text-rose-600 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M4 2h2v2h2v2h2v2h2v2h-2v2H8v2H6v2H4V2z"/>
+                        </svg>
+                        <span class="text-[11px] font-bold text-amber-950 mt-0.5">싱글 플레이</span>
+                    </button>
+
+                    <button id="btn-open-char" class="pixel-plaque py-2 flex flex-col items-center justify-center cursor-pointer group" title="캐릭터 변경">
+                        <div class="pixel-plaque-rivets"></div>
+                        <canvas id="lobbyCharIconCanvas" width="36" height="36" class="w-8 h-8 group-hover:scale-110 transition-transform"></canvas>
+                        <span class="text-[11px] font-bold text-amber-950 mt-0.5">캐릭터 변경</span>
+                    </button>
+                </div>
+
+                <!-- 1vs1 온라인 대전 명판 버튼 -->
+                <button id="btn-open-pvp" class="pixel-plaque w-full py-2.5 flex items-center justify-center gap-2 cursor-pointer">
+                    <div class="pixel-plaque-rivets"></div>
+                    <span class="font-pixel-kr font-bold text-base sm:text-lg text-rose-800 tracking-wide">⚔️ 온라인 1vs1 대전</span>
+                </button>
+
+                <!-- 하단 2열 보조 버튼: 명예의 전당(랭킹) / 조작키 설정 -->
+                <div class="grid grid-cols-2 gap-2.5">
+                    <button id="btn-open-rank" class="pixel-btn-indigo py-2 text-xs font-bold cursor-pointer">
+                        🏆 명예의 전당
+                    </button>
+                    <button id="btn-open-settings-bottom" class="pixel-plaque py-2 text-xs font-bold cursor-pointer">
+                        ⌨️ 조작키 설정
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- =========================================================================
+             2. 캐릭터 선택 모달 (비지니스맨, 복서, 학생, 교사 4종)
+             ========================================================================= -->
+        <div id="screen-char" class="relative z-30 hidden flex-1 flex-col justify-between p-4 bg-slate-950/95">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-pixel-kr font-bold text-xl text-amber-400">👤 캐릭터 선택 (4종)</h2>
+                    <button id="btn-close-char" class="pixel-plaque px-3 py-1 text-xs font-bold cursor-pointer">완료</button>
+                </div>
+                <p class="text-xs text-slate-300 mb-3">원하는 도트 캐릭터를 선택하세요. 1vs1 온라인 대전에서도 상대방에게 내 캐릭터가 보입니다!</p>
+
+                <div id="char-grid" class="grid grid-cols-2 gap-3">
+                    <!-- JS에서 4종의 도트 캐릭터 카드 생성 -->
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border-2 border-slate-700 p-3 text-center text-xs text-slate-400">
+                모든 캐릭터는 동일한 점프 속도와 판정을 가집니다.
+            </div>
+        </div>
+
+        <!-- =========================================================================
+             3. 조작키 설정 모달 (고정 화살표 + 커스텀 자판키 / F키 & 숫자키 차단)
+             ========================================================================= -->
+        <div id="screen-settings" class="relative z-30 hidden flex-1 flex-col justify-between p-4 bg-slate-950/95 overflow-y-auto">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-pixel-kr font-bold text-xl text-amber-400">⌨️ 조작키 설정</h2>
+                    <button id="btn-close-settings" class="pixel-plaque px-3 py-1 text-xs font-bold cursor-pointer">닫기</button>
+                </div>
+
+                <!-- 1. 기본 방향키 (변경 불가 고정) -->
+                <div class="pixel-box p-3 mb-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-amber-300">기본 방향키 (변경 불가)</span>
+                        <span class="text-[10px] bg-rose-900 text-rose-200 px-2 py-0.5 border border-rose-500">고정됨</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-center">
+                        <div class="bg-slate-950 border-2 border-slate-700 p-2">
+                            <div class="text-[11px] text-slate-400 mb-1">방향 전환 + 오르기</div>
+                            <div class="font-pixel-en text-sm text-slate-300">← (ArrowLeft)</div>
+                        </div>
+                        <div class="bg-slate-950 border-2 border-slate-700 p-2">
+                            <div class="text-[11px] text-slate-400 mb-1">오르기 (재시작)</div>
+                            <div class="font-pixel-en text-sm text-slate-300">→ (ArrowRight)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 사용자 커스텀 자판키 설정 -->
+                <div class="pixel-box p-3 mb-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-emerald-300">보조 자판키 (변경 가능)</span>
+                        <button id="btn-reset-keys" class="text-[10px] text-amber-400 underline cursor-pointer">기본값(Z / X) 복원</button>
+                    </div>
+                    <p class="text-[11px] text-slate-300 mb-3 leading-relaxed">
+                        아래 버튼을 클릭한 뒤 원하는 키보드 자판을 누르세요.<br>
+                        <span class="text-rose-400 font-bold">※ F1~F12 키 및 숫자(0~9, 넘버패드) 키는 설정할 수 없습니다.</span>
+                    </p>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div class="bg-slate-950 border-2 border-slate-700 p-2.5 text-center">
+                            <div class="text-[11px] text-rose-300 font-bold mb-1.5">방향 전환 + 오르기</div>
+                            <button id="btn-bind-turn" class="pixel-plaque w-full py-2 font-pixel-en text-sm font-bold cursor-pointer">
+                                Z
+                            </button>
+                        </div>
+                        <div class="bg-slate-950 border-2 border-slate-700 p-2.5 text-center">
+                            <div class="text-[11px] text-sky-300 font-bold mb-1.5">오르기 (게임 재시작)</div>
+                            <button id="btn-bind-climb" class="pixel-plaque w-full py-2 font-pixel-en text-sm font-bold cursor-pointer">
+                                X
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="key-bind-guide" class="mt-2.5 text-center text-xs text-amber-300 min-h-[18px] font-bold"></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border-2 border-slate-700 p-2.5 text-[11px] text-slate-300">
+                💡 게임 오버 화면에서 설정한 <span class="text-amber-300 font-bold">오르기 키</span>를 누르면 즉시 다음 판이 시작됩니다!
+            </div>
+        </div>
+
+        <!-- =========================================================================
+             4. 1vs1 온라인 대전 대기실 모달
+             ========================================================================= -->
+        <div id="screen-pvp" class="relative z-30 hidden flex-1 flex-col justify-between p-4 bg-slate-950/95 overflow-y-auto">
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="font-pixel-kr font-bold text-xl text-indigo-400">⚔️ 온라인 1vs1 대전</h2>
+                    <button id="btn-close-pvp" class="pixel-plaque px-3 py-1 text-xs font-bold cursor-pointer">닫기</button>
+                </div>
+                <p class="text-[11px] text-slate-300 mb-3 leading-relaxed">
+                    전 세계 온라인 유저와 실시간으로 동일한 계단을 오릅니다. 상대방의 도트 캐릭터가 반투명 고스트로 표시됩니다!
+                </p>
+
+                <div id="pvp-setup-area" class="flex flex-col gap-2.5">
+                    <!-- 1. 실시간 랜덤 빠른 매칭 -->
+                    <div class="pixel-box p-3 border-amber-500/60">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <h3 class="font-bold text-amber-300 text-xs">⚡ 실시간 랜덤 매칭</h3>
+                            <span class="text-[10px] text-emerald-400">자동 상대 찾기</span>
+                        </div>
+                        <button id="btn-quick-match" class="pixel-plaque w-full font-bold py-2.5 text-sm text-rose-800 cursor-pointer">
+                            빠른 대전 시작하기
+                        </button>
+                    </div>
+
+                    <!-- 2. 현재 대기 중인 공개방 목록 -->
+                    <div class="pixel-box p-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-bold text-white text-xs">📋 실시간 대기방 목록</h3>
+                            <button id="btn-create-public-room" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold px-2.5 py-1 border border-indigo-300 cursor-pointer">
+                                + 공개방 만들기
+                            </button>
+                        </div>
+                        <div id="pvp-open-rooms-list" class="max-h-28 overflow-y-auto flex flex-col gap-1.5 pr-1">
+                            <div class="text-center text-[11px] text-slate-400 py-3">대기 중인 공개방이 없습니다.</div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 친구 전용 비공개 코드 방 -->
+                    <div class="pixel-box p-3">
+                        <h3 class="font-bold text-white text-xs mb-2">🔑 친구 전용 코드 대전</h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="btn-create-room" class="pixel-btn-indigo font-bold py-2 text-xs cursor-pointer">
+                                비공개 방 생성
+                            </button>
+                            <div class="flex gap-1">
+                                <input id="input-room-code" type="text" maxlength="6" placeholder="코드" 
+                                    class="w-full bg-slate-950 border-2 border-slate-700 px-2 py-1 text-center font-pixel-en text-xs uppercase text-amber-400 focus:outline-none focus:border-indigo-400">
+                                <button id="btn-join-room" class="pixel-plaque px-2.5 font-bold text-xs cursor-pointer shrink-0">
+                                    입장
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 방 대기 중 화면 -->
+                <div id="pvp-waiting-area" class="hidden pixel-box p-5 text-center mt-2">
+                    <div id="pvp-wait-badge" class="inline-block bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-0.5 mb-2">
+                        공개 매칭 대기 중
+                    </div>
+                    <div class="text-xs text-indigo-200 font-bold mb-1">방 코드 (친구 초대 가능)</div>
+                    <div class="flex items-center justify-center gap-2 my-2.5">
+                        <span id="display-room-code" class="font-pixel-en text-3xl text-amber-400 bg-slate-950 px-4 py-2 border-4 border-slate-700">----</span>
+                        <button id="btn-copy-code" class="pixel-plaque p-2.5 text-xs font-bold cursor-pointer" title="코드 복사">
+                            복사
+                        </button>
+                    </div>
+                    <div class="text-xs text-slate-200 mt-3 animate-pulse" id="pvp-wait-msg">
+                        온라인 도전자를 기다리는 중...
+                    </div>
+                    <button id="btn-cancel-room" class="mt-4 text-xs text-rose-400 underline cursor-pointer">
+                        대기 취소 및 나가기
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border-2 border-slate-700 p-2.5 text-[11px] text-slate-300 mt-2">
+                <span class="text-amber-400 font-bold">승리 규칙:</span> 동일한 계단 맵에서 최종적으로 <span class="text-white font-bold">더 높은 계단</span>에 도달한 플레이어가 승리합니다!
+            </div>
+        </div>
+
+        <!-- =========================================================================
+             5. 글로벌 랭킹 모달 (명예의 전당 TOP 20)
+             ========================================================================= -->
+        <div id="screen-rank" class="relative z-30 hidden flex-1 flex-col justify-between p-4 bg-slate-950/95">
+            <div class="flex flex-col h-full overflow-hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-pixel-kr font-bold text-xl text-amber-400">🏆 명예의 전당 TOP 20</h2>
+                    <button id="btn-close-rank" class="pixel-plaque px-3 py-1 text-xs font-bold cursor-pointer">닫기</button>
+                </div>
+                <div class="bg-slate-900 border-2 border-slate-700 p-2.5 mb-2 flex justify-between items-center text-xs">
+                    <span class="text-slate-300">내 최고 기록:</span>
+                    <span id="rank-my-best" class="font-pixel-en text-amber-400">0</span>
+                </div>
+                <div id="ranking-list" class="flex-1 overflow-y-auto flex flex-col gap-1.5 pr-1">
+                    <div class="text-center text-slate-400 text-xs py-8">순위를 불러오는 중...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- =========================================================================
+             6. 프로필(닉네임) 설정 모달
+             ========================================================================= -->
+        <div id="screen-profile" class="relative z-30 hidden flex-1 flex-col justify-center p-5 bg-slate-950/95">
+            <div class="pixel-box p-5">
+                <h2 class="font-pixel-kr font-bold text-lg text-amber-400 mb-3">🪪 플레이어 프로필 설정</h2>
+                <label class="block text-xs text-slate-300 mb-1">닉네임 (최대 10자)</label>
+                <input id="input-nickname" type="text" maxlength="10" placeholder="닉네임 입력" 
+                    class="w-full bg-slate-950 border-2 border-slate-700 px-3 py-2 text-white text-sm mb-3 focus:outline-none focus:border-amber-400">
+                <div class="text-[11px] text-slate-400 mb-4 break-all">
+                    고유 ID: <span id="display-userid" class="text-slate-200 font-mono">연결 중...</span><br>
+                    서버 상태: <span id="conn-status" class="text-emerald-400">● 연결 확인 중</span>
+                </div>
+                <div class="flex gap-2">
+                    <button id="btn-save-profile" class="pixel-plaque flex-1 font-bold py-2 text-sm cursor-pointer">저장하기</button>
+                    <button id="btn-close-profile" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 text-sm border-2 border-slate-950 cursor-pointer">취소</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- =========================================================================
+             7. 인게임 HUD 및 하단 조작 버튼
+             ========================================================================= -->
+        <div id="screen-hud" class="relative z-20 hidden flex-1 flex-col justify-between pointer-events-none">
+            <!-- 상단 점수 & 타이머 게이지 -->
+            <div class="p-3 sm:p-4 flex flex-col items-center">
+                <!-- 1vs1 대전 상대방 진행 현황 바 -->
+                <div id="pvp-hud-bar" class="hidden w-full bg-slate-950/90 border-2 border-indigo-400 px-3 py-1.5 mb-2 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 bg-emerald-400 inline-block"></span>
+                        <span id="hud-my-name" class="font-bold text-white truncate max-w-[85px]">나</span>
+                        <span id="hud-my-score" class="font-pixel-en text-amber-400">0</span>
+                    </div>
+                    <span class="font-pixel-en text-[10px] text-rose-400">VS</span>
+                    <div class="flex items-center gap-1.5">
+                        <span id="hud-opp-score" class="font-pixel-en text-cyan-300">0</span>
+                        <span id="hud-opp-name" class="font-bold text-cyan-200 truncate max-w-[85px]">상대</span>
+                        <span id="hud-opp-status" class="w-2.5 h-2.5 bg-cyan-400 inline-block"></span>
+                    </div>
+                </div>
+
+                <!-- 현재 층수 & 최고 층수 -->
+                <div class="flex items-center justify-between w-full px-1">
+                    <div class="bg-slate-950/80 border-2 border-slate-700 px-2.5 py-1 text-[11px] text-slate-300">
+                        BEST <span id="hud-best-score" class="font-pixel-en text-amber-400 ml-1">0</span>
+                    </div>
+                    <div id="hud-score" class="font-pixel-en text-4xl sm:text-5xl text-white logo-stroke">0</div>
+                    <button id="btn-ingame-quit" class="pointer-events-auto bg-slate-950/85 hover:bg-rose-900 border-2 border-slate-600 px-2.5 py-1 text-xs text-slate-200 cursor-pointer">
+                        나가기
+                    </button>
+                </div>
+
+                <!-- 제한 시간 게이지 바 -->
+                <div class="w-56 sm:w-64 h-5 bg-slate-950 border-4 border-slate-800 mt-2 overflow-hidden shadow-lg">
+                    <div id="hud-time-bar" class="h-full bg-amber-400 transition-none" style="width: 100%;"></div>
+                </div>
+                <div id="hud-ready-hint" class="mt-2 bg-slate-950/85 border-2 border-amber-400 px-3 py-1 text-xs text-amber-300 font-bold animate-bounce">
+                    오르기 키를 누르면 시작합니다!
+                </div>
+            </div>
+
+            <!-- 하단 아케이드 조작 버튼 (터치 & 클릭 대응) -->
+            <div class="p-3 sm:p-4 grid grid-cols-2 gap-3 pointer-events-auto">
+                <button id="ctrl-turn" class="arcade-ctrl-btn bg-rose-600 hover:bg-rose-500 active:bg-rose-700 py-4 sm:py-5 flex flex-col items-center justify-center shadow-lg cursor-pointer">
+                    <span class="text-xl sm:text-2xl font-bold text-white">↩ 방향전환</span>
+                    <span id="ctrl-turn-hint" class="text-[11px] text-rose-100 mt-1 font-bold">[ ← / Z ] 회전+오르기</span>
+                </button>
+                <button id="ctrl-climb" class="arcade-ctrl-btn bg-sky-500 hover:bg-sky-400 active:bg-sky-600 py-4 sm:py-5 flex flex-col items-center justify-center shadow-lg cursor-pointer">
+                    <span class="text-xl sm:text-2xl font-bold text-white">⬆ 오르기</span>
+                    <span id="ctrl-climb-hint" class="text-[11px] text-sky-100 mt-1 font-bold">[ → / X ] 직진 오르기</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- =========================================================================
+             8. 게임 오버 결과 모달 (설정한 오르기 키로 즉시 재시작 지원)
+             ========================================================================= -->
+        <div id="screen-gameover" class="relative z-30 hidden flex-1 flex-col items-center justify-center p-5 bg-slate-950/90">
+            <div class="pixel-box w-full max-w-sm p-5 text-center">
+                <div id="go-badge" class="inline-block bg-rose-600 text-white text-xs font-bold px-3 py-1 mb-2 border-2 border-slate-950">
+                    GAME OVER
+                </div>
+                <h2 id="go-title" class="font-pixel-kr font-bold text-2xl text-white mb-1">추락했습니다!</h2>
+                <p id="go-subtitle" class="text-xs text-slate-300 mb-4">다음엔 더 높이 올라가 보세요.</p>
+
+                <!-- 1vs1 대전 승패 결과 박스 -->
+                <div id="go-pvp-result" class="hidden bg-slate-950 border-2 border-indigo-500 p-3 mb-4">
+                    <div id="go-pvp-verdict" class="font-pixel-kr font-bold text-lg text-amber-400 mb-2">결과 계산 중...</div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-slate-900 p-2 border border-slate-700">
+                            <div class="text-slate-400">나의 기록</div>
+                            <div id="go-pvp-my" class="font-pixel-en text-base text-white mt-1">0</div>
+                        </div>
+                        <div class="bg-slate-900 p-2 border border-slate-700">
+                            <div id="go-pvp-opp" class="font-pixel-en text-base text-cyan-300 mt-1">0</div>
+                            <div class="text-slate-400">상대 기록</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 싱글 기록 표시 -->
+                <div id="go-solo-result" class="grid grid-cols-2 gap-2.5 mb-4">
+                    <div class="bg-slate-950 border-2 border-slate-700 p-3">
+                        <div class="text-[11px] text-slate-400">도달한 계단</div>
+                        <div id="go-score" class="font-pixel-en text-2xl text-amber-400 mt-1">0</div>
+                    </div>
+                    <div class="bg-slate-950 border-2 border-slate-700 p-3">
+                        <div class="text-[11px] text-slate-400">최고 기록</div>
+                        <div id="go-best" class="font-pixel-en text-2xl text-emerald-400 mt-1">0</div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                    <button id="btn-retry" class="pixel-plaque w-full py-3 font-bold text-sm text-rose-900 cursor-pointer">
+                        🔄 다시 시작 [<span id="retry-key-label">→ / X</span>]
+                    </button>
+                    <button id="btn-go-lobby" class="pixel-btn-indigo w-full py-2.5 font-bold text-xs cursor-pointer">
+                        🏠 메인 로비로 이동
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDK 및 도트 게임 엔진 스크립트 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ============================================================================
+        // 1. Firebase 초기화 및 온라인 실시간 상태 동기화
+        // ============================================================================
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'infinite-stairs-dot-edition';
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let isOnline = false;
+        let presenceTimer = null;
+
+        async function initFirebase() {
+            try {
+                if (typeof __firebase_config === 'undefined') throw new Error("Firebase config missing");
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                currentUser = auth.currentUser;
+                isOnline = true;
+                document.getElementById('display-userid').textContent = currentUser.uid;
+                document.getElementById('conn-status').textContent = '● 온라인 서버 연결됨';
+                document.getElementById('conn-status').className = 'text-emerald-400 font-bold';
+
+                await loadUserProfile();
+                startOnlinePresence();
+                subscribeRankings();
+                subscribeLobbyChat();
+                subscribeOpenRooms();
+            } catch (err) {
+                isOnline = false;
+                currentUser = { uid: 'local-' + Math.random().toString(36).substring(2, 8) };
+                document.getElementById('display-userid').textContent = currentUser.uid + ' (로컬)';
+                document.getElementById('conn-status').textContent = '● 오프라인 모드';
+                document.getElementById('conn-status').className = 'text-amber-400 font-bold';
+                document.getElementById('lobby-online-dot').className = 'inline-block w-2 h-2 bg-amber-400';
+                document.getElementById('lobby-online-count').textContent = '오프라인';
+            }
+        }
+
+        function startOnlinePresence() {
+            if (!isOnline || !currentUser || !db) return;
+
+            const updateHeartbeat = async () => {
+                if (!isOnline || !currentUser) return;
+                try {
+                    const pRef = doc(db, 'artifacts', appId, 'public', 'data', 'online_players', currentUser.uid);
+                    await setDoc(pRef, {
+                        uid: currentUser.uid,
+                        nickname: gameState.nickname,
+                        selectedChar: gameState.selectedChar,
+                        status: gameState.status,
+                        lastSeen: Date.now()
+                    }, { merge: true });
+                } catch (e) {}
+            };
+
+            updateHeartbeat();
+            if (presenceTimer) clearInterval(presenceTimer);
+            presenceTimer = setInterval(updateHeartbeat, 15000);
+
+            const onlineCol = collection(db, 'artifacts', appId, 'public', 'data', 'online_players');
+            onSnapshot(onlineCol, (snapshot) => {
+                const now = Date.now();
+                const activeUsers = [];
+                snapshot.forEach(docSnap => {
+                    const d = docSnap.data();
+                    if (d && (now - (d.lastSeen || 0) < 45000)) {
+                        activeUsers.push(d);
+                    }
+                });
+
+                const count = Math.max(1, activeUsers.length);
+                document.getElementById('lobby-online-count').textContent = `온라인 ${count}명`;
+
+                gameState.onlinePeers = activeUsers
+                    .filter(u => u.uid !== currentUser.uid)
+                    .slice(0, 4);
+            }, () => {});
+        }
+
+        async function loadUserProfile() {
+            if (!isOnline || !currentUser || !db) return;
+            try {
+                const profileRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info');
+                const snap = await getDoc(profileRef);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (data.nickname) gameState.nickname = data.nickname;
+                    if (typeof data.bestScore === 'number') gameState.bestScore = data.bestScore;
+                    if (data.selectedChar && CHARACTERS[data.selectedChar]) gameState.selectedChar = data.selectedChar;
+                }
+                updateProfileUI();
+            } catch (e) {}
+        }
+
+        async function saveUserProfile(newNickname) {
+            gameState.nickname = newNickname || gameState.nickname;
+            updateProfileUI();
+            if (!isOnline || !currentUser || !db) return;
+            try {
+                const profileRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info');
+                await setDoc(profileRef, {
+                    nickname: gameState.nickname,
+                    bestScore: gameState.bestScore,
+                    selectedChar: gameState.selectedChar,
+                    updatedAt: Date.now()
+                }, { merge: true });
+            } catch (e) {}
+        }
+
+        async function submitScoreToLeaderboard(score) {
+            if (score <= 0 || !isOnline || !currentUser || !db) return;
+            try {
+                const rankRef = doc(db, 'artifacts', appId, 'public', 'data', 'leaderboard', currentUser.uid);
+                const snap = await getDoc(rankRef);
+                const prevBest = snap.exists() ? (snap.data().score || 0) : 0;
+                if (score > prevBest) {
+                    await setDoc(rankRef, {
+                        uid: currentUser.uid,
+                        nickname: gameState.nickname,
+                        score: score,
+                        selectedChar: gameState.selectedChar,
+                        updatedAt: Date.now()
+                    });
+                }
+            } catch (e) {}
+        }
+
+        function subscribeRankings() {
+            if (!isOnline || !db) return;
+            const rankCol = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+            onSnapshot(rankCol, (snapshot) => {
+                const list = [];
+                snapshot.forEach(docSnap => {
+                    const d = docSnap.data();
+                    if (d && typeof d.score === 'number') list.push(d);
+                });
+                list.sort((a, b) => b.score - a.score);
+                renderRankings(list.slice(0, 20));
+            }, () => {});
+        }
+
+        function renderRankings(topList) {
+            const container = document.getElementById('ranking-list');
+            if (!topList || topList.length === 0) {
+                container.innerHTML = '<div class="text-center text-slate-400 text-xs py-8">아직 등록된 기록이 없습니다. 첫 1위에 도전하세요!</div>';
+                return;
+            }
+            container.innerHTML = '';
+            topList.forEach((item, idx) => {
+                const isMe = currentUser && item.uid === currentUser.uid;
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+                const row = document.createElement('div');
+                row.className = `flex items-center justify-between px-3 py-2 border-2 ${isMe ? 'bg-amber-950/60 border-amber-400' : 'bg-slate-900 border-slate-700'}`;
+                row.innerHTML = `
+                    <div class="flex items-center gap-2.5 truncate">
+                        <span class="font-pixel-en text-xs w-8 text-amber-300">${medal}</span>
+                        <span class="text-xs font-bold ${isMe ? 'text-amber-300' : 'text-white'} truncate">${escapeHtml(item.nickname || '익명')}</span>
+                    </div>
+                    <span class="font-pixel-en text-xs text-emerald-400">${item.score}</span>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        // 실시간 로비 채팅
+        function subscribeLobbyChat() {
+            if (!isOnline || !db) return;
+            const chatCol = collection(db, 'artifacts', appId, 'public', 'data', 'lobby_chat');
+            onSnapshot(chatCol, (snapshot) => {
+                const msgs = [];
+                snapshot.forEach(d => {
+                    const data = d.data();
+                    if (data && data.text) msgs.push(data);
+                });
+                msgs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                const recent = msgs.slice(-15);
+                const box = document.getElementById('lobby-chat-messages');
+                box.innerHTML = '';
+                recent.forEach(m => {
+                    const line = document.createElement('div');
+                    const isMine = currentUser && m.uid === currentUser.uid;
+                    line.innerHTML = `<span class="${isMine ? 'text-amber-300' : 'text-cyan-300'} font-bold">[${escapeHtml(m.nickname || '유저')}]</span> <span class="text-slate-100">${escapeHtml(m.text)}</span>`;
+                    box.appendChild(line);
+                });
+                box.scrollTop = box.scrollHeight;
+            }, () => {});
+        }
+
+        async function sendLobbyChat(text) {
+            const clean = text.trim();
+            if (!clean) return;
+            if (!isOnline || !currentUser || !db) {
+                const box = document.getElementById('lobby-chat-messages');
+                const line = document.createElement('div');
+                line.innerHTML = `<span class="text-amber-300 font-bold">[${escapeHtml(gameState.nickname)}]</span> <span class="text-slate-100">${escapeHtml(clean)}</span>`;
+                box.appendChild(line);
+                box.scrollTop = box.scrollHeight;
+                return;
+            }
+            try {
+                const chatCol = collection(db, 'artifacts', appId, 'public', 'data', 'lobby_chat');
+                await addDoc(chatCol, {
+                    uid: currentUser.uid,
+                    nickname: gameState.nickname,
+                    text: clean,
+                    createdAt: Date.now()
+                });
+            } catch (e) {}
+        }
+
+        // ============================================================================
+        // 2. 도트(픽셀 아트) 캐릭터 4종 정의 & 스프라이트 렌더러
+        // ============================================================================
+        const CHARACTERS = {
+            businessman: {
+                id: 'businessman',
+                name: '비지니스맨',
+                en: 'BUSINESSMAN',
+                desc: '출근길에 쫓기는 열정적인 직장인',
+                palette: {
+                    H: '#1e1b18', // 머리카락
+                    S: '#fed7aa', // 피부
+                    E: '#090d16', // 눈/외곽
+                    W: '#ffffff', // 와이셔츠
+                    T: '#dc2626', // 빨간 넥타이
+                    J: '#1e293b', // 네이비 정장
+                    B: '#78350f', // 서류가방
+                    F: '#0f172a'  // 구두
+                },
+                // 12x18 도트 그리드 (오른쪽을 바라보는 기준)
+                grid: [
+                    '..HHHHHH....',
+                    '.HHHHHHHH...',
+                    '.HHSSSSSH...',
+                    '.HHSSESESH..',
+                    '.HHSSSSSSH..',
+                    '..SSSSSSS...',
+                    '..JJWTWWJJ..',
+                    '.JJJJWTWJJJ.',
+                    '.JJJJWTWJJB.',
+                    '.JJJJJJJJJB.',
+                    '.SSJJJJJJBB.',
+                    '..JJJJJJJ...',
+                    '..JJJ.JJJ...',
+                    '..JJJ.JJJ...',
+                    '..FF...FF...'
+                ]
+            },
+            boxer: {
+                id: 'boxer',
+                name: '복서',
+                en: 'BOXER',
+                desc: '챔피언 벨트를 노리는 헤비급 파이터',
+                palette: {
+                    H: '#dc2626', // 빨간 헤드기어
+                    S: '#f59e0b', // 구릿빛 피부
+                    E: '#090d16', // 눈
+                    G: '#ef4444', // 복싱 글러브
+                    T: '#2563eb', // 파란 트렁크
+                    W: '#ffffff', // 벨트/붕대
+                    F: '#dc2626'  // 복싱화
+                },
+                grid: [
+                    '..HHHHHH....',
+                    '.HHHHHHHH...',
+                    '.HHSSSSSH...',
+                    '.HHSSESESH..',
+                    '.HHSSSSSSH..',
+                    '..SSSSSSS...',
+                    '.SSSSSSSSG..',
+                    '.SSSSSSSSGG.',
+                    '.SSSSSSSSGG.',
+                    '..SSSSSSS...',
+                    '..WWWWWWW...',
+                    '..TTTTTTT...',
+                    '..TTT.TTT...',
+                    '..FF...FF...',
+                    '.FFF...FFF..'
+                ]
+            },
+            student: {
+                id: 'student',
+                name: '학생',
+                en: 'STUDENT',
+                desc: '지각 위기에 처한 고등학생',
+                palette: {
+                    H: '#27272a', // 단정한 머리
+                    S: '#ffedd5', // 밝은 피부
+                    E: '#090d16', // 눈
+                    C: '#334155', // 교복 자켓
+                    W: '#f8fafc', // 셔츠
+                    R: '#eab308', // 노란 명찰/포인트
+                    B: '#1d4ed8', // 책가방
+                    F: '#ffffff'  // 운동화
+                },
+                grid: [
+                    '..HHHHHH....',
+                    '.HHHHHHHH...',
+                    '.HHSSSSSH...',
+                    '.HHSSESESH..',
+                    '..SSSSSSS...',
+                    '.BBCCWCC....',
+                    '.BBCCRCC....',
+                    '.BBCCCCC....',
+                    '.SSCCCCC....',
+                    '..CCCCCC....',
+                    '..CC..CC....',
+                    '..CC..CC....',
+                    '..FF..FF....',
+                    '.FFF..FFF...'
+                ]
+            },
+            teacher: {
+                id: 'teacher',
+                name: '교사',
+                en: 'TEACHER',
+                desc: '엄격하지만 따뜻한 베테랑 선생님',
+                palette: {
+                    H: '#52525b', // 반백 헤어
+                    S: '#fed7aa', // 피부
+                    E: '#090d16', // 뿔테 안경
+                    W: '#e0f2fe', // 하늘색 셔츠
+                    V: '#15803d', // 초록 니트 조끼
+                    P: '#3f3f46', // 면바지
+                    B: '#b45309', // 출석부
+                    F: '#451a03'  // 로퍼
+                },
+                grid: [
+                    '..HHHHHH....',
+                    '.HHHHHHHH...',
+                    '.HHSSSSSH...',
+                    '.HHESESEEH..',
+                    '..SSSSSSS...',
+                    '..VVWVVVV...',
+                    '.VVVWVVVBB..',
+                    '.VVVVVVVBB..',
+                    '.SSVVVVV....',
+                    '..PPPPPPP...',
+                    '..PPP.PPP...',
+                    '..PPP.PPP...',
+                    '..FF...FF...'
+                ]
+            }
+        };
+
+        // 캔버스에 도트 캐릭터 렌더링 (발바닥 중앙 기준 x, y, direction: 1=우측, -1=좌측)
+        function drawPixelCharacter(ctx, charKey, footX, footY, scale, direction = 1, isGhost = false, stepFrame = 0) {
+            const charData = CHARACTERS[charKey] || CHARACTERS.businessman;
+            const grid = charData.grid;
+            const palette = charData.palette;
+            const rows = grid.length;
+            const cols = grid[0].length;
+
+            ctx.save();
+            if (isGhost) {
+                ctx.globalAlpha = 0.48;
+            }
+
+            // 바닥 그림자
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.fillRect(
+                Math.round(footX - (cols * scale) * 0.4),
+                Math.round(footY - scale * 0.6),
+                Math.round(cols * scale * 0.8),
+                Math.round(scale * 1.1)
+            );
+
+            ctx.translate(Math.round(footX), Math.round(footY));
+            if (direction === -1) {
+                ctx.scale(-1, 1);
+            }
+
+            const offsetX = -Math.floor((cols * scale) / 2);
+            const offsetY = -rows * scale;
+
+            // 1px 검은색 외곽선 먼저 그리기
+            ctx.fillStyle = '#090d16';
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const ch = grid[r][c];
+                    if (ch !== '.' && palette[ch]) {
+                        const px = offsetX + c * scale;
+                        const py = offsetY + r * scale;
+                        ctx.fillRect(px - 2, py, scale + 4, scale);
+                        ctx.fillRect(px, py - 2, scale, scale + 4);
+                    }
+                }
+            }
+
+            // 실제 도트 컬러 채우기 (걷기 프레임 시 다리 교차 효과)
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const ch = grid[r][c];
+                    if (ch !== '.' && palette[ch]) {
+                        let dy = 0;
+                        if (stepFrame !== 0 && r >= rows - 3) {
+                            dy = (c < cols / 2) ? -scale * 0.5 : scale * 0.3;
+                        }
+                        ctx.fillStyle = isGhost ? '#38bdf8' : palette[ch];
+                        ctx.fillRect(
+                            offsetX + c * scale,
+                            offsetY + r * scale + dy,
+                            scale,
+                            scale
+                        );
+                    }
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // 얼굴 아이콘 캔버스 렌더링
+        function renderCharIcon(canvas, charKey) {
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const charData = CHARACTERS[charKey] || CHARACTERS.businessman;
+            const grid = charData.grid.slice(0, 7);
+            const palette = charData.palette;
+            const scale = 3;
+            const offsetX = Math.floor((canvas.width - grid[0].length * scale) / 2);
+            const offsetY = 4;
+
+            for (let r = 0; r < grid.length; r++) {
+                for (let c = 0; c < grid[r].length; c++) {
+                    const ch = grid[r][c];
+                    if (ch !== '.' && palette[ch]) {
+                        ctx.fillStyle = palette[ch];
+                        ctx.fillRect(offsetX + c * scale, offsetY + r * scale, scale, scale);
+                    }
+                }
+            }
+        }
+
+        // ============================================================================
+        // 3. 레트로 칩튠 사운드 엔진 (Web Audio API - 외부 파일 불필요)
+        // ============================================================================
+        const soundEngine = {
+            ctx: null,
+            sfxEnabled: true,
+            bgmEnabled: false,
+            bgmInterval: null,
+            bgmStep: 0,
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+
+            playTone(freq, type = 'square', duration = 0.08, vol = 0.12) {
+                if (!this.sfxEnabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, now);
+                gain.gain.setValueAtTime(vol, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + duration);
+            },
+
+            playStep(combo = 0) {
+                const pitch = Math.min(880, 320 + (combo % 16) * 28);
+                this.playTone(pitch, 'square', 0.065, 0.1);
+            },
+
+            playTurn(combo = 0) {
+                const pitch = Math.min(920, 380 + (combo % 16) * 28);
+                this.playTone(pitch, 'triangle', 0.075, 0.13);
+            },
+
+            playFall() {
+                if (!this.sfxEnabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(65, now + 0.38);
+                gain.gain.setValueAtTime(0.16, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.38);
+            },
+
+            toggleBgm() {
+                this.bgmEnabled = !this.bgmEnabled;
+                if (this.bgmEnabled) {
+                    this.init();
+                    const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 293.66, 392.00];
+                    this.bgmInterval = setInterval(() => {
+                        if (!this.bgmEnabled || !this.ctx) return;
+                        const f = notes[this.bgmStep % notes.length];
+                        this.bgmStep++;
+                        const now = this.ctx.currentTime;
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(f, now);
+                        gain.gain.setValueAtTime(0.045, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(now);
+                        osc.stop(now + 0.18);
+                    }, 240);
+                } else if (this.bgmInterval) {
+                    clearInterval(this.bgmInterval);
+                    this.bgmInterval = null;
+                }
+                return this.bgmEnabled;
+            }
+        };
+
+        // ============================================================================
+        // 4. 게임 핵심 상태 및 원작 무한의 계단 메커니즘
+        // ============================================================================
+        const gameState = {
+            status: 'lobby', // 'lobby' | 'ready' | 'playing' | 'gameover'
+            mode: 'solo',    // 'solo' | 'pvp'
+            nickname: '도전자_' + Math.floor(100 + Math.random() * 900),
+            selectedChar: 'businessman',
+            bestScore: 0,
+            score: 0,
+            gameOverTimestamp: 0,
+
+            // 키 바인딩 설정 (기본 방향키는 고정, 보조 자판키만 변경 가능)
+            keyBindings: {
+                turnCode: 'KeyZ',
+                turnLabel: 'Z',
+                climbCode: 'KeyX',
+                climbLabel: 'X'
+            },
+            bindingTarget: null, // 'turn' | 'climb' | null
+
+            // 계단 데이터 및 난수 시드
+            seed: 12345,
+            stairs: [], // [{ index, x, y }] (x: 정수 그리드 좌표, y: 층수)
+
+            // 플레이어 상태 및 부드러운 애니메이션 보간
+            player: {
+                stepIndex: 0,
+                gridX: 0,
+                gridY: 0,
+                dir: 1, // 1: 오른쪽, -1: 왼쪽
+                // 점프 궤적 보간용
+                prevX: 0,
+                prevY: 0,
+                visualX: 0,
+                visualY: 0,
+                jumpProgress: 1, // 0 -> 1
+                squash: 1,
+                stepFrame: 0,
+                fallVelocityY: 0,
+                falling: false
+            },
+
+            // 카메라 부드러운 추적 좌표 (Lerp)
+            camera: {
+                x: 0,
+                y: 0
+            },
+
+            // 시간 게이지 (원작처럼 층수가 오를수록 감소 속도 증가)
+            timeLeft: 100,
+            maxTime: 100,
+
+            // 파티클 효과
+            particles: [],
+
+            // 온라인 광장 & 1vs1 대전 상태
+            onlinePeers: [],
+            roomId: null,
+            role: null, // 'host' | 'guest'
+            roomUnsubscribe: null,
+            lastSyncTime: 0,
+            opponent: {
+                uid: null,
+                nickname: '상대방',
+                selectedChar: 'boxer',
+                stepIndex: 0,
+                gridX: 0,
+                gridY: 0,
+                dir: 1,
+                finished: false,
+                visualX: 0,
+                visualY: 0
+            }
+        };
+
+        // 시드 기반 결정론적 난수 생성기 (1vs1 대전 시 양쪽이 100% 동일한 계단 생성)
+        function seededRandom(seed) {
+            let s = seed % 2147483647;
+            if (s <= 0) s += 2147483646;
+            return function() {
+                s = (s * 16807) % 2147483647;
+                return (s - 1) / 2147483646;
+            };
+        }
+
+        function generateStairs(seed, count = 600) {
+            const rng = seededRandom(seed);
+            const list = [{ index: 0, x: 0, y: 0 }];
+            let curX = 0;
+            let curDir = 1; // 첫 계단은 오른쪽(1)으로 시작
+
+            for (let i = 1; i <= count; i++) {
+                if (i === 1) {
+                    curDir = 1;
+                } else {
+                    // 약 32% 확률로 방향 전환 (원작의 리듬감 재현)
+                    if (rng() < 0.32) {
+                        curDir = -curDir;
+                    }
+                }
+                curX += curDir;
+                list.push({ index: i, x: curX, y: i });
+            }
+            return list;
+        }
+
+        function ensureStairsUpTo(targetIndex) {
+            if (targetIndex + 100 < gameState.stairs.length) return;
+            const last = gameState.stairs[gameState.stairs.length - 1];
+            const prev = gameState.stairs[gameState.stairs.length - 2];
+            let curDir = last.x - prev.x;
+            let curX = last.x;
+            const rng = seededRandom(gameState.seed + last.index);
+
+            for (let i = last.index + 1; i <= targetIndex + 200; i++) {
+                if (rng() < 0.32) curDir = -curDir;
+                curX += curDir;
+                gameState.stairs.push({ index: i, x: curX, y: i });
+            }
+        }
+
+        // 게임 초기화 및 시작 준비
+        function startGame(mode = 'solo', customSeed = null) {
+            gameState.mode = mode;
+            gameState.status = 'ready';
+            gameState.score = 0;
+            gameState.seed = customSeed !== null ? customSeed : Math.floor(Math.random() * 900000) + 100000;
+            gameState.stairs = generateStairs(gameState.seed, 600);
+
+            gameState.player = {
+                stepIndex: 0,
+                gridX: 0,
+                gridY: 0,
+                dir: 1, // 시작 시 오른쪽을 바라봄
+                prevX: 0,
+                prevY: 0,
+                visualX: 0,
+                visualY: 0,
+                jumpProgress: 1,
+                squash: 1,
+                stepFrame: 0,
+                fallVelocityY: 0,
+                falling: false
+            };
+
+            gameState.camera.x = 0;
+            gameState.camera.y = 0;
+            gameState.timeLeft = 100;
+            gameState.particles = [];
+
+            if (mode === 'pvp') {
+                gameState.opponent.stepIndex = 0;
+                gameState.opponent.gridX = 0;
+                gameState.opponent.gridY = 0;
+                gameState.opponent.dir = 1;
+                gameState.opponent.finished = false;
+                gameState.opponent.visualX = 0;
+                gameState.opponent.visualY = 0;
+                document.getElementById('pvp-hud-bar').classList.remove('hidden');
+                document.getElementById('hud-my-name').textContent = gameState.nickname;
+                document.getElementById('hud-my-score').textContent = '0';
+                document.getElementById('hud-opp-name').textContent = gameState.opponent.nickname || '상대방';
+                document.getElementById('hud-opp-score').textContent = '0';
+            } else {
+                document.getElementById('pvp-hud-bar').classList.add('hidden');
+            }
+
+            document.getElementById('hud-score').textContent = '0';
+            document.getElementById('hud-best-score').textContent = gameState.bestScore;
+            document.getElementById('hud-time-bar').style.width = '100%';
+            document.getElementById('hud-ready-hint').classList.remove('hidden');
+            updateKeyHintsUI();
+
+            showScreen('screen-hud');
+            startOnlinePresence();
+        }
+
+        // ============================================================================
+        // 5. 실제 <무한의 계단>과 100% 동일한 핵심 조작 로직
+        //    - 오르기(actionType = 'climb'): 현재 바라보는 방향으로 1칸 전진 + 상승
+        //    - 방향 전환(actionType = 'turn'): 바라보는 방향을 반전시킨 뒤, 그 방향으로 즉시 1칸 전진 + 상승!
+        // ============================================================================
+        function handleStepAction(actionType) {
+            if (gameState.status !== 'ready' && gameState.status !== 'playing') return;
+
+            if (gameState.status === 'ready') {
+                gameState.status = 'playing';
+                document.getElementById('hud-ready-hint').classList.add('hidden');
+            }
+
+            const p = gameState.player;
+
+            // 1. 방향 전환 키를 눌렀을 경우: 바라보는 방향을 먼저 반전시킴 (제자리 회전이 아님!)
+            if (actionType === 'turn') {
+                p.dir = -p.dir;
+            }
+
+            // 2. 현재 바라보는 방향(p.dir)으로 1칸 이동 목표 좌표 계산
+            const nextIndex = p.stepIndex + 1;
+            ensureStairsUpTo(nextIndex);
+            const targetStair = gameState.stairs[nextIndex];
+            const intendedX = p.gridX + p.dir;
+
+            // 점프 애니메이션 시작점 저장
+            p.prevX = p.visualX;
+            p.prevY = p.visualY;
+            p.jumpProgress = 0;
+            p.squash = 1.28;
+            p.stepFrame = (p.stepFrame === 0) ? 1 : 0;
+
+            // 3. 계단 존재 여부 판정
+            if (targetStair && targetStair.x === intendedX) {
+                // 성공! 계단 위로 안착
+                p.stepIndex = nextIndex;
+                p.gridX = intendedX;
+                p.gridY = nextIndex;
+                gameState.score = nextIndex;
+
+                // 시간 게이지 회복 (층수가 높을수록 회복량 미세 감소)
+                const recover = Math.max(4.5, 11 - Math.floor(gameState.score / 50) * 0.8);
+                gameState.timeLeft = Math.min(100, gameState.timeLeft + recover);
+
+                // 효과음 재생
+                if (actionType === 'turn') {
+                    soundEngine.playTurn(gameState.score);
+                } else {
+                    soundEngine.playStep(gameState.score);
+                }
+
+                // 10층 단위 황금 계단 돌파 파티클
+                if (gameState.score % 10 === 0) {
+                    spawnPixelParticles(p.gridX, p.gridY, '#fbbf24', 14);
+                } else {
+                    spawnPixelParticles(p.gridX, p.gridY, '#e2e8f0', 4);
+                }
+
+                document.getElementById('hud-score').textContent = gameState.score;
+                if (gameState.mode === 'pvp') {
+                    document.getElementById('hud-my-score').textContent = gameState.score;
+                    syncPvpProgress(false);
+                }
+            } else {
+                // 허공으로 발을 디딤 -> 추락 게임 오버!
+                p.gridX = intendedX;
+                p.gridY = nextIndex;
+                triggerGameOver('허공으로 발을 디뎠습니다!');
+            }
+        }
+
+        function spawnPixelParticles(gx, gy, color, count) {
+            for (let i = 0; i < count; i++) {
+                gameState.particles.push({
+                    x: gx,
+                    y: gy,
+                    vx: (Math.random() - 0.5) * 0.25,
+                    vy: Math.random() * 0.22 + 0.08,
+                    life: 1.0,
+                    color
+                });
+            }
+        }
+
+        function triggerGameOver(reasonText) {
+            if (gameState.status === 'gameover') return;
+            gameState.status = 'gameover';
+            gameState.gameOverTimestamp = performance.now();
+            gameState.player.falling = true;
+            gameState.player.fallVelocityY = 0.15;
+
+            soundEngine.playFall();
+
+            // 최고 기록 갱신
+            if (gameState.score > gameState.bestScore) {
+                gameState.bestScore = gameState.score;
+                saveUserProfile(gameState.nickname);
+            }
+
+            if (gameState.mode === 'solo') {
+                submitScoreToLeaderboard(gameState.score);
+                document.getElementById('go-solo-result').classList.remove('hidden');
+                document.getElementById('go-pvp-result').classList.add('hidden');
+                document.getElementById('go-badge').textContent = 'GAME OVER';
+                document.getElementById('go-title').textContent = '추락했습니다!';
+                document.getElementById('go-subtitle').textContent = reasonText;
+                document.getElementById('go-score').textContent = gameState.score;
+                document.getElementById('go-best').textContent = gameState.bestScore;
+            } else {
+                // 1vs1 온라인 대전 결과 처리
+                syncPvpProgress(true);
+                document.getElementById('go-solo-result').classList.add('hidden');
+                document.getElementById('go-pvp-result').classList.remove('hidden');
+                document.getElementById('go-badge').textContent = '1vs1 BATTLE';
+                document.getElementById('go-title').textContent = '경기 종료!';
+                document.getElementById('go-subtitle').textContent = reasonText;
+                document.getElementById('go-pvp-my').textContent = gameState.score;
+                document.getElementById('go-pvp-opp').textContent = gameState.opponent.stepIndex;
+                updatePvpVerdictUI();
+            }
+
+            updateKeyHintsUI();
+            setTimeout(() => {
+                if (gameState.status === 'gameover') {
+                    showScreen('screen-gameover');
+                }
+            }, 350);
+        }
+
+        function updatePvpVerdictUI() {
+            const myS = gameState.score;
+            const oppS = gameState.opponent.stepIndex;
+            const oppDone = gameState.opponent.finished;
+            const verdictEl = document.getElementById('go-pvp-verdict');
+
+            if (!oppDone && myS <= oppS) {
+                verdictEl.textContent = '상대방이 계속 오르는 중... (패배 확정)';
+                verdictEl.className = 'font-pixel-kr font-bold text-sm text-rose-400 mb-2';
+            } else if (!oppDone && myS > oppS) {
+                verdictEl.textContent = '상대방의 기록을 기다리는 중...';
+                verdictEl.className = 'font-pixel-kr font-bold text-sm text-amber-300 mb-2 animate-pulse';
+            } else {
+                if (myS > oppS) {
+                    verdictEl.textContent = '🎉 1vs1 대전 승리! 🎉';
+                    verdictEl.className = 'font-pixel-kr font-bold text-lg text-emerald-400 mb-2';
+                } else if (myS < oppS) {
+                    verdictEl.textContent = '😭 1vs1 대전 패배...';
+                    verdictEl.className = 'font-pixel-kr font-bold text-lg text-rose-400 mb-2';
+                } else {
+                    verdictEl.textContent = '🤝 극적인 무승부!';
+                    verdictEl.className = 'font-pixel-kr font-bold text-lg text-amber-300 mb-2';
+                }
+            }
+        }
+
+        // ============================================================================
+        // 6. 1vs1 온라인 멀티플레이어 방 생성 / 매칭 / 실시간 동기화
+        // ============================================================================
+        function subscribeOpenRooms() {
+            if (!isOnline || !db) return;
+            const roomsCol = collection(db, 'artifacts', appId, 'public', 'data', 'pvp_rooms');
+            onSnapshot(roomsCol, (snapshot) => {
+                const openRooms = [];
+                const now = Date.now();
+                snapshot.forEach(docSnap => {
+                    const d = docSnap.data();
+                    if (d && d.status === 'waiting' && d.isPublic && (now - (d.createdAt || 0) < 180000)) {
+                        if (!currentUser || d.host?.uid !== currentUser.uid) {
+                            openRooms.push({ id: docSnap.id, ...d });
+                        }
+                    }
+                });
+                renderOpenRoomsList(openRooms);
+            }, () => {});
+        }
+
+        function renderOpenRoomsList(rooms) {
+            const container = document.getElementById('pvp-open-rooms-list');
+            if (!rooms || rooms.length === 0) {
+                container.innerHTML = '<div class="text-center text-[11px] text-slate-400 py-3">현재 대기 중인 공개방이 없습니다.</div>';
+                return;
+            }
+            container.innerHTML = '';
+            rooms.forEach(r => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between bg-slate-950 border border-slate-700 px-2.5 py-1.5';
+                item.innerHTML = `
+                    <div class="truncate">
+                        <span class="text-xs font-bold text-white">${escapeHtml(r.host?.nickname || '도전자')}</span>
+                        <span class="text-[10px] text-amber-400 ml-1">[${escapeHtml(r.id)}]</span>
+                    </div>
+                    <button class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[11px] px-2.5 py-1 cursor-pointer">
+                        대전 참가
+                    </button>
+                `;
+                item.querySelector('button').addEventListener('click', () => joinPvpRoom(r.id));
+                container.appendChild(item);
+            });
+        }
+
+        async function quickMatchPvp() {
+            if (!isOnline || !currentUser || !db) {
+                showToast('온라인 연결이 필요합니다.');
+                return;
+            }
+            try {
+                const roomsCol = collection(db, 'artifacts', appId, 'public', 'data', 'pvp_rooms');
+                const snap = await getDocs(roomsCol);
+                const now = Date.now();
+                let foundRoomId = null;
+
+                snap.forEach(docSnap => {
+                    if (foundRoomId) return;
+                    const d = docSnap.data();
+                    if (d && d.status === 'waiting' && d.isPublic && (now - (d.createdAt || 0) < 180000)) {
+                        if (d.host?.uid !== currentUser.uid) {
+                            foundRoomId = docSnap.id;
+                        }
+                    }
+                });
+
+                if (foundRoomId) {
+                    await joinPvpRoom(foundRoomId);
+                } else {
+                    await createPvpRoom(true);
+                }
+            } catch (e) {
+                showToast('매칭 중 오류가 발생했습니다.');
+            }
+        }
+
+        async function createPvpRoom(isPublic = false) {
+            if (!isOnline || !currentUser || !db) {
+                showToast('온라인 연결이 필요합니다.');
+                return;
+            }
+            const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+            const seed = Math.floor(Math.random() * 900000) + 100000;
+
+            try {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'pvp_rooms', code);
+                await setDoc(roomRef, {
+                    status: 'waiting',
+                    isPublic: isPublic,
+                    seed: seed,
+                    createdAt: Date.now(),
+                    host: {
+                        uid: currentUser.uid,
+                        nickname: gameState.nickname,
+                        selectedChar: gameState.selectedChar,
+                        stepIndex: 0,
+                        gridX: 0,
+                        dir: 1,
+                        finished: false
+                    },
+                    guest: null
+                });
+
+                gameState.roomId = code;
+                gameState.role = 'host';
+
+                document.getElementById('pvp-setup-area').classList.add('hidden');
+                document.getElementById('pvp-waiting-area').classList.remove('hidden');
+                document.getElementById('pvp-wait-badge').textContent = isPublic ? '공개 매칭 대기 중' : '비공개 코드 대기 중';
+                document.getElementById('display-room-code').textContent = code;
+
+                listenToPvpRoom(code);
+            } catch (e) {
+                showToast('방 생성에 실패했습니다.');
+            }
+        }
+
+        async function joinPvpRoom(codeInput) {
+            const code = (codeInput || '').trim().toUpperCase();
+            if (!code || code.length < 4) {
+                showToast('4자리 방 코드를 입력하세요.');
+                return;
+            }
+            if (!isOnline || !currentUser || !db) {
+                showToast('온라인 연결이 필요합니다.');
+                return;
+            }
+
+            try {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'pvp_rooms', code);
+                const snap = await getDoc(roomRef);
+                if (!snap.exists()) {
+                    showToast('존재하지 않는 방 코드입니다.');
+                    return;
+                }
+                const data = snap.data();
+                if (data.status !== 'waiting') {
+                    showToast('이미 시작되었거나 종료된 방입니다.');
+                    return;
+                }
+
+                gameState.roomId = code;
+                gameState.role = 'guest';
+                gameState.opponent.uid = data.host.uid;
+                gameState.opponent.nickname = data.host.nickname;
+                gameState.opponent.selectedChar = data.host.selectedChar || 'businessman';
+
+                await updateDoc(roomRef, {
+                    status: 'playing',
+                    guest: {
+                        uid: currentUser.uid,
+                        nickname: gameState.nickname,
+                        selectedChar: gameState.selectedChar,
+                        stepIndex: 0,
+                        gridX: 0,
+                        dir: 1,
+                        finished: false
+                    }
+                });
+
+                listenToPvpRoom(code);
+                startGame('pvp', data.seed);
+                showToast(`${data.host.nickname}님과 대전 시작!`);
+            } catch (e) {
+                showToast('방 입장에 실패했습니다.');
+            }
+        }
+
+        function listenToPvpRoom(code) {
+            if (gameState.roomUnsubscribe) {
+                gameState.roomUnsubscribe();
+                gameState.roomUnsubscribe = null;
+            }
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'pvp_rooms', code);
+            gameState.roomUnsubscribe = onSnapshot(roomRef, (snap) => {
+                if (!snap.exists()) return;
+                const data = snap.data();
+
+                // 방장 대기 중 상대방이 입장한 경우 즉시 게임 시작
+                if (gameState.role === 'host' && data.status === 'playing' && gameState.status === 'lobby' && data.guest) {
+                    gameState.opponent.uid = data.guest.uid;
+                    gameState.opponent.nickname = data.guest.nickname;
+                    gameState.opponent.selectedChar = data.guest.selectedChar || 'boxer';
+                    startGame('pvp', data.seed);
+                    showToast(`${data.guest.nickname}님이 입장했습니다!`);
+                    return;
+                }
+
+                // 진행 중 상대방 위치/방향/종료 동기화
+                const oppData = gameState.role === 'host' ? data.guest : data.host;
+                if (oppData) {
+                    gameState.opponent.stepIndex = oppData.stepIndex || 0;
+                    gameState.opponent.gridX = oppData.gridX || 0;
+                    gameState.opponent.gridY = oppData.stepIndex || 0;
+                    gameState.opponent.dir = oppData.dir || 1;
+                    gameState.opponent.finished = Boolean(oppData.finished);
+                    gameState.opponent.selectedChar = oppData.selectedChar || 'boxer';
+
+                    if (gameState.mode === 'pvp') {
+                        document.getElementById('hud-opp-score').textContent = gameState.opponent.stepIndex;
+                        document.getElementById('go-pvp-opp').textContent = gameState.opponent.stepIndex;
+                        if (gameState.opponent.finished) {
+                            document.getElementById('hud-opp-status').className = 'w-2.5 h-2.5 bg-rose-500 inline-block';
+                        }
+                        if (gameState.status === 'gameover') {
+                            updatePvpVerdictUI();
+                        }
+                    }
+                }
+            }, () => {});
+        }
+
+        async function syncPvpProgress(finished = false) {
+            if (gameState.mode !== 'pvp' || !gameState.roomId || !isOnline || !db) return;
+            const now = Date.now();
+            if (!finished && now - gameState.lastSyncTime < 140) return;
+            gameState.lastSyncTime = now;
+
+            try {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'pvp_rooms', gameState.roomId);
+                const field = gameState.role === 'host' ? 'host' : 'guest';
+                await updateDoc(roomRef, {
+                    [`${field}.stepIndex`]: gameState.score,
+                    [`${field}.gridX`]: gameState.player.gridX,
+                    [`${field}.dir`]: gameState.player.dir,
+                    [`${field}.finished`]: finished
+                });
+            } catch (e) {}
+        }
+
+        async function leavePvpRoom() {
+            if (gameState.roomUnsubscribe) {
+                gameState.roomUnsubscribe();
+                gameState.roomUnsubscribe = null;
+            }
+            if (gameState.roomId && gameState.role === 'host' && isOnline && db) {
+                try {
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'pvp_rooms', gameState.roomId);
+                    await deleteDoc(roomRef);
+                } catch (e) {}
+            }
+            gameState.roomId = null;
+            gameState.role = null;
+            document.getElementById('pvp-waiting-area').classList.add('hidden');
+            document.getElementById('pvp-setup-area').classList.remove('hidden');
+        }
+
+        // ============================================================================
+        // 7. 도트 캔버스 메인 렌더링 루프 (배경 + 부드러운 카메라 + 점프 궤적)
+        // ============================================================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = Math.floor(rect.width);
+            canvas.height = Math.floor(rect.height);
+            ctx.imageSmoothingEnabled = false;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // 첨부 레퍼런스 스타일의 도트 벽돌 아파트 & 도로 배경 그리기
+        function drawLobbyStreetBackground(w, h) {
+            // 하늘
+            ctx.fillStyle = '#7dd3fc';
+            ctx.fillRect(0, 0, w, h);
+
+            // 붉은 벽돌 아파트 외벽
+            const wallBottom = Math.floor(h * 0.68);
+            ctx.fillStyle = '#b45309';
+            ctx.fillRect(0, 0, w, wallBottom);
+
+            // 벽돌 줄무늬 패턴
+            ctx.fillStyle = '#92400e';
+            const brickH = 14;
+            const brickW = 28;
+            for (let y = 0; y < wallBottom; y += brickH) {
+                ctx.fillRect(0, y, w, 2);
+                const shift = (Math.floor(y / brickH) % 2) * (brickW / 2);
+                for (let x = shift; x < w; x += brickW) {
+                    ctx.fillRect(x, y, 2, brickH);
+                }
+            }
+
+            // 아파트 창문들
+            const winCols = [0.14, 0.44, 0.74];
+            const winRows = [0.06, 0.28];
+            winRows.forEach(ry => {
+                winCols.forEach(rx => {
+                    const wx = Math.floor(w * rx);
+                    const wy = Math.floor(h * ry);
+                    const ww = Math.floor(w * 0.16);
+                    const wh = Math.floor(h * 0.14);
+                    ctx.fillStyle = '#fef3c7';
+                    ctx.fillRect(wx - 4, wy - 4, ww + 8, wh + 8);
+                    ctx.fillStyle = '#1e293b';
+                    ctx.fillRect(wx, wy, ww, wh);
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.fillRect(wx + 4, wy + 4, ww - 8, wh - 8);
+                    ctx.fillStyle = '#fef3c7';
+                    ctx.fillRect(wx + Math.floor(ww / 2) - 2, wy, 4, wh);
+                });
+            });
+
+            // 인도 (보도블록)
+            const sidewalkTop = wallBottom;
+            const roadTop = Math.floor(h * 0.76);
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillRect(0, sidewalkTop, w, roadTop - sidewalkTop);
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(0, roadTop - 6, w, 6);
+
+            // 아스팔트 도로 & 중앙선
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(0, roadTop, w, h - roadTop);
+            ctx.fillStyle = '#facc15';
+            ctx.fillRect(0, roadTop + Math.floor((h - roadTop) * 0.45), w, 6);
+        }
+
+        // 인게임 고도에 따라 변하는 도트 배경
+        function drawIngameSkyBackground(w, h, altitude) {
+            let topColor = '#38bdf8';
+            let botColor = '#bae6fd';
+            if (altitude > 250) {
+                topColor = '#020617';
+                botColor = '#1e1b4b';
+            } else if (altitude > 120) {
+                topColor = '#1e1b4b';
+                botColor = '#be185d';
+            } else if (altitude > 50) {
+                topColor = '#0284c7';
+                botColor = '#fde68a';
+            }
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, topColor);
+            grad.addColorStop(1, botColor);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            // 도트 구름 또는 별
+            ctx.fillStyle = altitude > 120 ? '#fef08a' : 'rgba(255,255,255,0.75)';
+            for (let i = 0; i < 8; i++) {
+                const cx = ((i * 97 + Math.floor(altitude * 0.6)) % (w + 80)) - 40;
+                const cy = ((i * 113 + Math.floor(altitude * 2.5)) % (h - 100)) + 30;
+                if (altitude > 120) {
+                    ctx.fillRect(cx, cy, 4, 4);
+                } else {
+                    ctx.fillRect(cx, cy, 44, 12);
+                    ctx.fillRect(cx + 8, cy - 6, 28, 6);
+                }
+            }
+        }
+
+        let lastFrameTime = performance.now();
+
+        function gameLoop(now) {
+            const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+            lastFrameTime = now;
+
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.imageSmoothingEnabled = false;
+
+            // ====================================================================
+            // A. 로비 화면 렌더링 (첨부 이미지 거리 + 내 캐릭터 + 온라인 접속자)
+            // ====================================================================
+            if (gameState.status === 'lobby') {
+                drawLobbyStreetBackground(w, h);
+
+                let stageCenterX = w * 0.5;
+                let stageFloorY = h * 0.55;
+                const stageEl = document.getElementById('lobby-stage');
+                const tagEl = document.getElementById('lobby-char-tag');
+
+                if (stageEl) {
+                    const cRect = canvas.getBoundingClientRect();
+                    const sRect = stageEl.getBoundingClientRect();
+                    if (cRect.width > 0 && sRect.height > 0) {
+                        stageCenterX = (sRect.left - cRect.left) + sRect.width * 0.5;
+                        const tagTop = tagEl ? (tagEl.getBoundingClientRect().top - cRect.top) : (sRect.bottom - cRect.top - 22);
+                        stageFloorY = Math.max(sRect.top - cRect.top + 65, tagTop - 6);
+                    }
+                }
+
+                const charScale = Math.max(3.5, Math.min(5, Math.floor(Math.min(w, h) * 0.0095)));
+                const peerScale = Math.max(2.8, charScale * 0.78);
+
+                // 함께 접속 중인 온라인 플레이어들 표시
+                const peerOffsets = [-0.28, 0.28, -0.40, 0.40];
+                (gameState.onlinePeers || []).forEach((peer, idx) => {
+                    const px = w * (0.5 + peerOffsets[idx % peerOffsets.length]);
+                    const py = stageFloorY - 4 + Math.floor(Math.sin(now * 0.005 + idx * 2) * 2);
+                    const pDir = peerOffsets[idx % peerOffsets.length] < 0 ? 1 : -1;
+
+                    drawPixelCharacter(ctx, peer.selectedChar || 'businessman', px, py, peerScale, pDir, false);
+
+                    ctx.font = 'bold 10px "Galmuri11", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillText(peer.nickname || '유저', px + 1, py - peerScale * 16 - 5);
+                    ctx.fillStyle = '#a7f3d0';
+                    ctx.fillText(peer.nickname || '유저', px, py - peerScale * 16 - 6);
+                });
+
+                // 중앙 내 도트 캐릭터
+                const bob = Math.floor(Math.sin(now * 0.006) * 2);
+                drawPixelCharacter(ctx, gameState.selectedChar, stageCenterX, stageFloorY + bob, charScale, 1, false);
+
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            // ====================================================================
+            // B. 인게임 물리, 타이머, 부드러운 카메라 추적 & 포물선 점프 업데이트
+            // ====================================================================
+            const p = gameState.player;
+
+            // 시간 게이지 감소
+            if (gameState.status === 'playing') {
+                const drainSpeed = 14 + Math.min(26, gameState.score * 0.14);
+                gameState.timeLeft -= drainSpeed * dt;
+                if (gameState.timeLeft <= 0) {
+                    gameState.timeLeft = 0;
+                    triggerGameOver('제한 시간이 초과되었습니다!');
+                }
+                const bar = document.getElementById('hud-time-bar');
+                bar.style.width = `${gameState.timeLeft}%`;
+                bar.className = gameState.timeLeft < 30 ? 'h-full bg-rose-500' : 'h-full bg-amber-400';
+            }
+
+            // 포물선 점프 궤적 보간 (원작처럼 계단 사이를 톡톡 튀어 오르는 모션)
+            if (p.jumpProgress < 1) {
+                p.jumpProgress = Math.min(1, p.jumpProgress + dt * 14);
+                const t = p.jumpProgress;
+                p.visualX = p.prevX + (p.gridX - p.prevX) * t;
+                const arcHeight = Math.sin(t * Math.PI) * 0.42;
+                p.visualY = p.prevY + (p.gridY - p.prevY) * t + arcHeight;
+            } else {
+                p.visualX = p.gridX;
+                p.visualY = p.gridY;
+            }
+
+            // 추락 애니메이션
+            if (p.falling) {
+                p.fallVelocityY -= 1.8 * dt;
+                p.visualY += p.fallVelocityY;
+            }
+
+            // 부드러운 카메라 추적 (Lerp) - 화면 전환이 끊기지 않고 자연스럽게 따라감
+            const camLerp = 1 - Math.pow(0.0008, dt);
+            gameState.camera.x += (p.gridX - gameState.camera.x) * camLerp;
+            gameState.camera.y += (p.gridY - gameState.camera.y) * camLerp;
+
+            // 상대방 고스트 부드러운 보간
+            if (gameState.mode === 'pvp') {
+                const opp = gameState.opponent;
+                opp.visualX += (opp.gridX - opp.visualX) * camLerp;
+                opp.visualY += (opp.gridY - opp.visualY) * camLerp;
+            }
+
+            // ====================================================================
+            // C. 인게임 계단, 고스트, 플레이어, 파티클 렌더링
+            // ====================================================================
+            drawIngameSkyBackground(w, h, gameState.score);
+
+            const stepW = Math.max(46, Math.min(62, Math.floor(w * 0.13)));
+            const stepH = Math.max(24, Math.min(32, Math.floor(h * 0.038)));
+            const anchorScreenX = Math.floor(w * 0.5);
+            const anchorScreenY = Math.floor(h * 0.62);
+
+            const toScreenX = (gx) => Math.round(anchorScreenX + (gx - gameState.camera.x) * stepW);
+            const toScreenY = (gy) => Math.round(anchorScreenY - (gy - gameState.camera.y) * stepH);
+
+            // 화면에 보이는 계단 범위만 그리기
+            const minStair = Math.max(0, Math.floor(gameState.camera.y) - 12);
+            const maxStair = Math.min(gameState.stairs.length - 1, Math.floor(gameState.camera.y) + 22);
+
+            for (let i = minStair; i <= maxStair; i++) {
+                const st = gameState.stairs[i];
+                if (!st) continue;
+                const sx = toScreenX(st.x);
+                const sy = toScreenY(st.y);
+
+                const isMilestone = st.y > 0 && st.y % 10 === 0;
+                const topColor = st.y === 0 ? '#94a3b8' : (isMilestone ? '#fbbf24' : '#f8fafc');
+                const sideColor = st.y === 0 ? '#475569' : (isMilestone ? '#b45309' : '#94a3b8');
+
+                const boxW = stepW - 4;
+                const boxH = Math.floor(stepH * 0.68);
+                const left = sx - Math.floor(boxW / 2);
+
+                // 도트 계단 외곽선 및 입체 블록
+                ctx.fillStyle = '#090d16';
+                ctx.fillRect(left - 2, sy - 2, boxW + 4, boxH + 4);
+                ctx.fillStyle = sideColor;
+                ctx.fillRect(left, sy, boxW, boxH);
+                ctx.fillStyle = topColor;
+                ctx.fillRect(left, sy, boxW, Math.floor(boxH * 0.45));
+
+                // 10층 단위 층수 표시
+                if (isMilestone) {
+                    ctx.font = 'bold 10px "Press Start 2P", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#090d16';
+                    ctx.fillText(`${st.y}`, sx, sy + boxH + 13);
+                }
+            }
+
+            const ingameCharScale = Math.max(3, Math.floor(stepW / 14));
+
+            // 1vs1 대전 상대방 고스트 렌더링
+            if (gameState.mode === 'pvp') {
+                const opp = gameState.opponent;
+                const ox = toScreenX(opp.visualX);
+                const oy = toScreenY(opp.visualY);
+                drawPixelCharacter(ctx, opp.selectedChar, ox, oy, ingameCharScale, opp.dir, true, 0);
+
+                ctx.font = 'bold 10px "Galmuri11", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillText(opp.nickname || '상대', ox, oy - ingameCharScale * 16 - 4);
+            }
+
+            // 내 도트 캐릭터 렌더링
+            const px = toScreenX(p.visualX);
+            const py = toScreenY(p.visualY);
+            drawPixelCharacter(ctx, gameState.selectedChar, px, py, ingameCharScale, p.dir, false, p.stepFrame);
+
+            // 파티클 업데이트 및 렌더링
+            for (let i = gameState.particles.length - 1; i >= 0; i--) {
+                const pt = gameState.particles[i];
+                pt.x += pt.vx;
+                pt.y += pt.vy;
+                pt.vy -= 0.015;
+                pt.life -= dt * 2.5;
+                if (pt.life <= 0) {
+                    gameState.particles.splice(i, 1);
+                    continue;
+                }
+                ctx.fillStyle = pt.color;
+                ctx.fillRect(toScreenX(pt.x) - 3, toScreenY(pt.y) - 3, 6, 6);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ============================================================================
+        // 8. UI 제어, 키 설정(F키/숫자키 차단), 즉시 재시작 이벤트 바인딩
+        // ============================================================================
+        function showScreen(screenId) {
+            const screens = [
+                'screen-lobby', 'screen-char', 'screen-settings',
+                'screen-pvp', 'screen-rank', 'screen-profile',
+                'screen-hud', 'screen-gameover'
+            ];
+            screens.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (id === screenId) {
+                    el.classList.remove('hidden');
+                    el.classList.add('flex');
+                } else {
+                    el.classList.add('hidden');
+                    el.classList.remove('flex');
+                }
+            });
+        }
+
+        let toastTimer = null;
+        function showToast(msg) {
+            const box = document.getElementById('toast-box');
+            document.getElementById('toast-msg').textContent = msg;
+            box.classList.remove('opacity-0', '-translate-y-4');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                box.classList.add('opacity-0', '-translate-y-4');
+            }, 2200);
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, s => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[s]));
+        }
+
+        function updateProfileUI() {
+            document.getElementById('lobby-nick-display').textContent = gameState.nickname;
+            document.getElementById('rank-my-best').textContent = gameState.bestScore;
+            const charInfo = CHARACTERS[gameState.selectedChar] || CHARACTERS.businessman;
+            document.getElementById('lobby-char-tag').textContent = `${charInfo.name} (${charInfo.en})`;
+            renderCharIcon(document.getElementById('lobbyCharIconCanvas'), gameState.selectedChar);
+        }
+
+        function updateKeyHintsUI() {
+            const tLabel = gameState.keyBindings.turnLabel;
+            const cLabel = gameState.keyBindings.climbLabel;
+            document.getElementById('btn-bind-turn').textContent = tLabel;
+            document.getElementById('btn-bind-climb').textContent = cLabel;
+            document.getElementById('ctrl-turn-hint').textContent = `[ ← / ${tLabel} ] 회전+오르기`;
+            document.getElementById('ctrl-climb-hint').textContent = `[ → / ${cLabel} ] 직진 오르기`;
+            document.getElementById('retry-key-label').textContent = `→ / ${cLabel}`;
+        }
+
+        // 캐릭터 선택 그리드 렌더링
+        function renderCharacterSelectionGrid() {
+            const grid = document.getElementById('char-grid');
+            grid.innerHTML = '';
+            Object.values(CHARACTERS).forEach(ch => {
+                const isSelected = gameState.selectedChar === ch.id;
+                const card = document.createElement('button');
+                card.className = `p-3 border-4 text-left flex flex-col items-center cursor-pointer transition-transform ${
+                    isSelected ? 'bg-amber-950/80 border-amber-400 scale-[1.02]' : 'bg-slate-900 border-slate-700 hover:border-slate-500'
+                }`;
+                card.innerHTML = `
+                    <canvas width="48" height="48" class="w-12 h-12 mb-1.5"></canvas>
+                    <div class="font-bold text-sm ${isSelected ? 'text-amber-300' : 'text-white'}">${ch.name}</div>
+                    <div class="text-[10px] text-slate-400 text-center mt-0.5 leading-tight">${ch.desc}</div>
+                `;
+                renderCharIcon(card.querySelector('canvas'), ch.id);
+                card.addEventListener('click', () => {
+                    gameState.selectedChar = ch.id;
+                    updateProfileUI();
+                    renderCharacterSelectionGrid();
+                    saveUserProfile(gameState.nickname);
+                    startOnlinePresence();
+                });
+                grid.appendChild(card);
+            });
+        }
+
+        // 키보드 입력 처리 (키 바인딩 + 인게임 조작 + 게임 오버 후 오르기 키 즉시 재시작)
+        window.addEventListener('keydown', (e) => {
+            if (e.repeat) return;
+
+            // 채팅이나 입력창에 포커스가 있을 때는 게임 조작 무시
+            const activeTag = document.activeElement?.tagName;
+            if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
+            // 1. 설정 화면에서 자판키 바인딩 대기 중인 경우
+            if (gameState.bindingTarget) {
+                e.preventDefault();
+                const code = e.code;
+
+                // F시리즈 키(F1~F12) 차단
+                if (/^F([1-9]|1[0-2])$/.test(code) || /^F([1-9]|1[0-2])$/.test(e.key)) {
+                    showToast('F1~F12 키는 설정할 수 없습니다!');
+                    return;
+                }
+                // 넘버 키(상단 숫자 0~9 및 Numpad0~9) 차단
+                if (code.startsWith('Digit') || code.startsWith('Numpad') || /^[0-9]$/.test(e.key)) {
+                    showToast('숫자(넘버) 키는 설정할 수 없습니다!');
+                    return;
+                }
+                // 고정 화살표 키 및 시스템 키 차단
+                if (code === 'ArrowLeft' || code === 'ArrowRight' || code === 'Escape') {
+                    showToast('기본 방향키(←, →) 및 ESC는 변경할 수 없습니다!');
+                    return;
+                }
+
+                const displayLabel = e.key === ' ' ? 'SPACE' : e.key.toUpperCase();
+                if (gameState.bindingTarget === 'turn') {
+                    if (code === gameState.keyBindings.climbCode) {
+                        showToast('오르기 키와 중복될 수 없습니다!');
+                        return;
+                    }
+                    gameState.keyBindings.turnCode = code;
+                    gameState.keyBindings.turnLabel = displayLabel;
+                } else if (gameState.bindingTarget === 'climb') {
+                    if (code === gameState.keyBindings.turnCode) {
+                        showToast('방향 전환 키와 중복될 수 없습니다!');
+                        return;
+                    }
+                    gameState.keyBindings.climbCode = code;
+                    gameState.keyBindings.climbLabel = displayLabel;
+                }
+
+                gameState.bindingTarget = null;
+                document.getElementById('key-bind-guide').textContent = `설정 완료: ${displayLabel}`;
+                updateKeyHintsUI();
+                showToast(`조작키가 [${displayLabel}]로 변경되었습니다.`);
+                return;
+            }
+
+            // 2. 게임 오버 화면에서 설정한 '오르기 키(기본 ArrowRight 또는 커스텀 오르기 키)'를 누르면 즉시 재시작!
+            if (gameState.status === 'gameover') {
+                if (e.code === 'ArrowRight' || e.code === gameState.keyBindings.climbCode) {
+                    e.preventDefault();
+                    // 연타 실수 방지를 위한 0.35초 안전 딜레이
+                    if (performance.now() - gameState.gameOverTimestamp > 350) {
+                        if (gameState.mode === 'solo') {
+                            startGame('solo');
+                        } else {
+                            leavePvpRoom();
+                            gameState.status = 'lobby';
+                            showScreen('screen-pvp');
+                        }
+                    }
+                }
+                return;
+            }
+
+            // 3. 인게임 조작 (고정 화살표 키 + 사용자 커스텀 자판키)
+            if (gameState.status === 'ready' || gameState.status === 'playing') {
+                if (e.code === 'ArrowLeft' || e.code === gameState.keyBindings.turnCode) {
+                    e.preventDefault();
+                    handleStepAction('turn');
+                } else if (e.code === 'ArrowRight' || e.code === gameState.keyBindings.climbCode) {
+                    e.preventDefault();
+                    handleStepAction('climb');
+                }
+            }
+        });
+
+        // 버튼 이벤트 바인딩
+        function bindUIEvents() {
+            // SFX / BGM 토글
+            document.getElementById('btn-toggle-sfx').addEventListener('click', () => {
+                soundEngine.sfxEnabled = !soundEngine.sfxEnabled;
+                document.getElementById('icon-sfx').textContent = soundEngine.sfxEnabled ? '🔊' : '🔇';
+                showToast(soundEngine.sfxEnabled ? '효과음 켜짐' : '효과음 꺼짐');
+            });
+
+            document.getElementById('btn-toggle-bgm').addEventListener('click', () => {
+                const on = soundEngine.toggleBgm();
+                document.getElementById('icon-bgm').textContent = on ? '🎵' : '🔕';
+                showToast(on ? '배경음 켜짐' : '배경음 꺼짐');
+            });
+
+            // 싱글 플레이 시작
+            document.getElementById('btn-start-solo').addEventListener('click', () => {
+                soundEngine.init();
+                startGame('solo');
+            });
+
+            // 캐릭터 선택 화면 열기/닫기
+            document.getElementById('btn-open-char').addEventListener('click', () => {
+                renderCharacterSelectionGrid();
+                showScreen('screen-char');
+            });
+            document.getElementById('btn-close-char').addEventListener('click', () => {
+                showScreen('screen-lobby');
+            });
+
+            // 조작키 설정 화면 열기/닫기
+            const openSettings = () => {
+                gameState.bindingTarget = null;
+                document.getElementById('key-bind-guide').textContent = '';
+                updateKeyHintsUI();
+                showScreen('screen-settings');
+            };
+            document.getElementById('btn-open-settings').addEventListener('click', openSettings);
+            document.getElementById('btn-open-settings-bottom').addEventListener('click', openSettings);
+            document.getElementById('btn-close-settings').addEventListener('click', () => {
+                gameState.bindingTarget = null;
+                showScreen('screen-lobby');
+            });
+
+            document.getElementById('btn-bind-turn').addEventListener('click', () => {
+                gameState.bindingTarget = 'turn';
+                document.getElementById('key-bind-guide').textContent = '▶ [방향 전환 + 오르기]에 사용할 키를 누르세요...';
+            });
+            document.getElementById('btn-bind-climb').addEventListener('click', () => {
+                gameState.bindingTarget = 'climb';
+                document.getElementById('key-bind-guide').textContent = '▶ [오르기]에 사용할 키를 누르세요...';
+            });
+            document.getElementById('btn-reset-keys').addEventListener('click', () => {
+                gameState.bindingTarget = null;
+                gameState.keyBindings = { turnCode: 'KeyZ', turnLabel: 'Z', climbCode: 'KeyX', climbLabel: 'X' };
+                document.getElementById('key-bind-guide').textContent = '기본값(Z / X)으로 복원되었습니다.';
+                updateKeyHintsUI();
+            });
+
+            // 1vs1 온라인 대전
+            document.getElementById('btn-open-pvp').addEventListener('click', () => {
+                soundEngine.init();
+                showScreen('screen-pvp');
+            });
+            document.getElementById('btn-close-pvp').addEventListener('click', () => {
+                leavePvpRoom();
+                showScreen('screen-lobby');
+            });
+            document.getElementById('btn-quick-match').addEventListener('click', quickMatchPvp);
+            document.getElementById('btn-create-public-room').addEventListener('click', () => createPvpRoom(true));
+            document.getElementById('btn-create-room').addEventListener('click', () => createPvpRoom(false));
+            document.getElementById('btn-join-room').addEventListener('click', () => {
+                joinPvpRoom(document.getElementById('input-room-code').value);
+            });
+            document.getElementById('btn-cancel-room').addEventListener('click', leavePvpRoom);
+            document.getElementById('btn-copy-code').addEventListener('click', () => {
+                const code = document.getElementById('display-room-code').textContent;
+                const temp = document.createElement('input');
+                temp.value = code;
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand('copy');
+                document.body.removeChild(temp);
+                showToast(`방 코드 [${code}]가 복사되었습니다!`);
+            });
+
+            // 명예의 전당 (랭킹)
+            document.getElementById('btn-open-rank').addEventListener('click', () => {
+                document.getElementById('rank-my-best').textContent = gameState.bestScore;
+                showScreen('screen-rank');
+            });
+            document.getElementById('btn-close-rank').addEventListener('click', () => {
+                showScreen('screen-lobby');
+            });
+
+            // 프로필(닉네임) 설정
+            document.getElementById('btn-open-profile').addEventListener('click', () => {
+                document.getElementById('input-nickname').value = gameState.nickname;
+                showScreen('screen-profile');
+            });
+            document.getElementById('btn-save-profile').addEventListener('click', () => {
+                const val = document.getElementById('input-nickname').value.trim();
+                if (val) {
+                    saveUserProfile(val);
+                    startOnlinePresence();
+                    showToast('프로필이 저장되었습니다.');
+                }
+                showScreen('screen-lobby');
+            });
+            document.getElementById('btn-close-profile').addEventListener('click', () => {
+                showScreen('screen-lobby');
+            });
+
+            // 로비 채팅 전송
+            document.getElementById('lobby-chat-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const input = document.getElementById('lobby-chat-input');
+                sendLobbyChat(input.value);
+                input.value = '';
+            });
+
+            // 인게임 터치/클릭 조작 버튼
+            const bindArcadeBtn = (el, action) => {
+                const trigger = (e) => {
+                    e.preventDefault();
+                    handleStepAction(action);
+                };
+                el.addEventListener('touchstart', trigger, { passive: false });
+                el.addEventListener('mousedown', trigger);
+            };
+            bindArcadeBtn(document.getElementById('ctrl-turn'), 'turn');
+            bindArcadeBtn(document.getElementById('ctrl-climb'), 'climb');
+
+            // 인게임 나가기 및 게임 오버 버튼
+            document.getElementById('btn-ingame-quit').addEventListener('click', () => {
+                leavePvpRoom();
+                gameState.status = 'lobby';
+                showScreen('screen-lobby');
+            });
+
+            document.getElementById('btn-retry').addEventListener('click', () => {
+                if (gameState.mode === 'solo') {
+                    startGame('solo');
+                } else {
+                    leavePvpRoom();
+                    gameState.status = 'lobby';
+                    showScreen('screen-pvp');
+                }
+            });
+
+            document.getElementById('btn-go-lobby').addEventListener('click', () => {
+                leavePvpRoom();
+                gameState.status = 'lobby';
+                showScreen('screen-lobby');
+            });
+        }
+
+        // ============================================================================
+        // 9. 애플리케이션 부트스트랩
+        // ============================================================================
+        window.onload = function () {
+            resizeCanvas();
+            bindUIEvents();
+            updateProfileUI();
+            updateKeyHintsUI();
+            initFirebase();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
